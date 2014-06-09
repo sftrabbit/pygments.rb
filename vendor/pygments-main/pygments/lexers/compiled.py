@@ -203,6 +203,13 @@ class CppLexer(CFamilyLexer):
     mimetypes = ['text/x-c++hdr', 'text/x-c++src']
     priority = 0.1
 
+    #: optional Comment or Whitespace
+    _ws = r'(?:\s|//.*?\n|/[*].*?[*]/)+'
+    #: only one /* */ style comment
+    _ws1 = r'\s*(?:/[*].*?[*]/\s*)*'
+    #: Attributes
+    _attrs = r'(\[\[.*?\]\]\s*)?'
+
     tokens = {
         'statements': [
             (r'(asm|catch|const_cast|delete|dynamic_cast|explicit|'
@@ -210,16 +217,34 @@ class CppLexer(CFamilyLexer):
              r'private|protected|public|reinterpret_cast|'
              r'restrict|static_cast|template|this|throw|throws|'
              r'typeid|typename|using|virtual)\b', Keyword),
-            (r'(class)(\s+)', bygroups(Keyword, Text), 'classname'),
+            (r'(class)(\s+)' + _attrs, bygroups(Keyword, Text, using(this)), 'classname'),
+            (r'(enum)(\s+)'+ _attrs, bygroups(Keyword, Text, using(this)), 'classname'),
             inherit,
          ],
         'root': [
-            inherit,
+            # functions
+            (_attrs +                     # attributes
+             r'((?:[\w*\s])+?(?:\s|[*]))' # return arguments
+             r'([a-zA-Z_]\w*)'            # method name
+             r'(\s*\([^;]*?\))'           # signature
+             r'(' + _ws + r')?({)',
+             bygroups(using(this), using(this), Name.Function, using(this), using(this),
+                      Punctuation),
+             'function'),
+            # function declarations
+            (_attrs +                     # attributes
+             r'((?:[\w*\s])+?(?:\s|[*]))' # return arguments
+             r'([a-zA-Z_]\w*)'            # method name
+             r'(\s*\([^;]*?\))'           # signature
+             r'(' + _ws + r')?(;)',
+             bygroups(using(this), using(this), Name.Function, using(this), using(this),
+                      Punctuation)),
             # C++ Microsoft-isms
             (r'__(virtual_inheritance|uuidof|super|single_inheritance|'
              r'multiple_inheritance|interface|event)\b', Keyword.Reserved),
             # Offload C++ extensions, http://offload.codeplay.com/
             (r'(__offload|__blockingoffload|__outer)\b', Keyword.Pseudo),
+            inherit,
         ],
         'classname': [
             (r'[a-zA-Z_][a-zA-Z0-9_]*', Name.Class, '#pop'),
